@@ -10,7 +10,10 @@
             "runtimeArgs": [
                 "--debug=5858", "index.js"
             ],
-            "port": 5858
+            "port": 5858,
+            "env": {
+                    "MASTER_KEY": "123"
+                }
         },
         {
             "name": "Attach to running Server",
