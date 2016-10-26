@@ -623,7 +623,7 @@ Parse.Cloud.define("setupTables", function(request, response) {
                     break;
             }
         }
-        instance.save(null, { useMasterKey: true }, {
+        instance.save(null, { useMasterKey: true,
             success: function (newObj) {
                 // remember the new object so we can destroy it later, or use it as a relation target.
                 classes[ic].parseObject = newObj;
@@ -685,7 +685,7 @@ Parse.Cloud.define("setupTables", function(request, response) {
                     version = new versionType();
                 }
                 version.set("minDesktopVersion", "2.0");
-                version.save(null, { useMasterKey: true }, {
+                version.save(null, { useMasterKey: true,
                     success: function () {
                         // Finally destroy the spurious user we made.
                         aUser.destroy({success: function () {
