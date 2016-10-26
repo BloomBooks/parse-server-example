@@ -437,10 +437,6 @@ Parse.Cloud.define("defaultBooks", function(request, response) {
 // by hand.
 // Run this function from a command line like this (with the appropriate keys for the application inserted)
 // curl -X POST -H "X-Parse-Application-Id: <insert ID>"  -H "X-Parse-REST-API-Key: <insert REST key>" https://api.parse.com/1/functions/setupTables
-// Note: if you are debugging future versions of this and get an error like this:
-// {"code":141,"error":"{\"administrator\":false,\"username\":\"xxyyzzAVeryUnlikelyDummyName\",\"password\":\"Unguessable\"}"}
-// Probably an earlier run created but did not delete the fake user that we use as target for Pointer<_User> fields.
-// Just delete that user by hand in the parse.com data browser.
 Parse.Cloud.define("setupTables", function(request, response) {
     // Required BloomLibrary classes/fields
     // Note: code below currently requires that 'books' is first.
@@ -689,8 +685,7 @@ Parse.Cloud.define("setupTables", function(request, response) {
                     success: function () {
                         // Finally destroy the spurious user we made.
                         aUser.destroy({success: function () {
-                            response.success("Tables created!");
-                        },
+                            response.success("SetupTables ran to completion.");                        },
                             error: function (error) {
                                 response.error(error);
                             }
@@ -707,8 +702,11 @@ Parse.Cloud.define("setupTables", function(request, response) {
             }
         });
     };
-    // Create a user.
-    Parse.User.signUp("xxyyzzAVeryUnlikelyDummyName", "Unguessable", {administrator: false}, {
+    // Create a user, temporarily, which we will delete later.
+    // While debugging I got tired of having to manualy remove previous "temporary" users,
+    // hence each is now unique.
+     var rand = parseInt((Math.random() * 10000), 10);
+     Parse.User.signUp("zzDummyUserForSetTables"+rand, "unprotected", {administrator: false}, {
         success: function(newUser) {
             aUser = newUser;
             doOne(); // start the recursion.
