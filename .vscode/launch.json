@@ -13,8 +13,8 @@
             "port": 5858,
             "env": {
                     "MASTER_KEY": "123"
-                    //can the following to use with a remote mongodb, else you get the local one
-                    //,"DATABASE_URI": "mongodb://azure-blorg-unit-test:Ym3ETJf9gzXR@ds044989.mlab.com:44989/blorg-unit-test"
+                    //can use the following to use with a remote mongodb, else you get the local one
+                    //,"DATABASE_URI": "mongodb://<path to mongo db with credentials"
                 }
         },
         {

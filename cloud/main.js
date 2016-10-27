@@ -18,8 +18,7 @@ Parse.Cloud.define('testDB', function(req, res) {
             }
         });
     } catch(ex) {
-        console.log('bloom-parse-server cloud-code: testDB: testDB GameScore read failed: '+ex);
-        result = "1) GameScore read threw exception. "+ex;
+        console.log('bloom-parse-server cloud-code: testDB: testDB GameScore read threw exception: '+ex);
     }
 
     try {
@@ -32,7 +31,7 @@ Parse.Cloud.define('testDB', function(req, res) {
                  console.log('bloom-parse-server cloud-code: testDB: save succeeded');
             },
             error: function (error) {
-                console.log('bloom-parse-server cloud-code: testDB: save failed');
+                console.log('bloom-parse-server cloud-code: testDB: save failed'+error);
             }
         });
 
@@ -715,7 +714,7 @@ Parse.Cloud.define("setupTables", function(request, response) {
                     success: function () {
                         // Finally destroy the spurious user we made.
                         aUser.destroy({success: function () {
-                            response.success("SetupTables ran to completion.");                        },
+                            response.success("setupTables ran to completion.");                        },
                             error: function (error) {
                                 response.error(error);
                             }
@@ -733,10 +732,10 @@ Parse.Cloud.define("setupTables", function(request, response) {
         });
     };
     // Create a user, temporarily, which we will delete later.
-    // While debugging I got tired of having to manualy remove previous "temporary" users,
+    // While debugging I got tired of having to manually remove previous "temporary" users,
     // hence each is now unique.
      var rand = parseInt((Math.random() * 10000), 10);
-     Parse.User.signUp("zzDummyUserForSetTables"+rand, "unprotected", {administrator: false}, {
+     Parse.User.signUp("zzDummyUserForSetupTables"+rand, "unprotected", {administrator: false}, {
         success: function(newUser) {
             aUser = newUser;
             doOne(); // start the recursion.
