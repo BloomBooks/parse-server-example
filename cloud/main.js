@@ -744,5 +744,87 @@ Parse.Cloud.define("setupTables", function(request, response) {
             response.error(error);
         }
     });
-
 });
+
+Parse.Cloud.define("sendEmail", function(request, response) {
+    // TODO get this working for a little protection from spamming
+    // if (!request.user) {
+    //     response.error('Error: must be logged in to call sendEmail');
+    //     return;
+    // }
+
+    var toAddress = request.params.toAddress;
+    var fromAddress = request.params.fromAddress;
+    var subject = request.params.subject;
+    if (!subject)
+        subject = '[BloomLibrary]'; //sendgrid doesn't like this being empty
+    var content = request.params.content;
+    var book = request.params.book;
+
+    var mail;
+    const helper = require('sendgrid').mail;
+    const sgFromAddress = new helper.Email(fromAddress);
+    var sgToAddress;
+    const sgContent = new helper.Content('text/plain', content);
+    const systemTag = 'system:';
+    if (toAddress.startsWith(systemTag)) {
+        systemType = toAddress.substr(systemTag.length);
+        switch (systemType) {
+            case 'concerns':
+                mail = getReportBookMail(sgFromAddress, sgContent, book);
+                break;
+            default:
+                response.error('Error: unrecognized system tag used in toAddress: ' + toAddress);
+                return;
+        }
+    } else {
+        sgToAddress = new helper.Email(toAddress);
+        mail = new helper.Mail(sgFromAddress, subject, sgToAddress, sgContent);
+    }
+        
+    const sg = require('sendgrid')(process.env.SENDGRID_API_KEY);
+    const sgRequest = sg.emptyRequest({
+        method: 'POST',
+        path: '/v3/mail/send',
+        body: mail.toJSON()
+    });
+
+    sg.API(sgRequest, function(error, sgResponse) {
+        if (error) {
+            console.log('Error response received: ' + error);
+            response.error('Error response received: ' + error);
+            return;
+        }
+        // console.log(sgResponse.statusCode);
+        // console.log(sgResponse.body);
+        // console.log(sgResponse.headers);
+    });
+
+    response.success('Sent');
+});
+
+function getReportBookMail(sgFromAddress, sgContent, book) {
+    // Don't set the 'to' here.
+    // It must be set in the personalization (below), and if we set both, two emails are sent.    
+    const helper = require('sendgrid').mail;
+    const mail = new helper.Mail();
+    mail.setFrom(sgFromAddress);
+    mail.setSubject(' '); // Can't be empty
+    mail.addContent(sgContent);
+
+    mail.setTemplateId('5840534b-3c8c-4871-9f9a-c6d07fb52fae'); // Report a Book
+
+    // The real idea behind personalization is to create custom content for each recipient.
+    // We just use it to populate a few fields we care about (title, url).
+    const personalization = new helper.Personalization();
+    personalization.addTo(new helper.Email(process.env.EMAIL_REPORT_BOOK));
+    personalization.addSubstitution(new helper.Substitution(':title', book.title));
+    personalization.addSubstitution(new helper.Substitution(':url', getBookUrl(book)));
+    mail.addPersonalization(personalization);
+
+    return mail;
+}
+
+function getBookUrl(book) {
+    return "http://www.bloomlibrary.org/browse/detail/" + book.objectId;
+}
