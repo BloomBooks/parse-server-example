@@ -367,13 +367,16 @@ Parse.Cloud.afterSave("downloadHistory", function(request) {
     query.get(bookId, {success: function(book) {
         var currentDownloadCount = book.get('downloadCount') || 0;
         book.set('downloadCount', currentDownloadCount + 1);
-        book.save(null, { useMasterKey: true }).then(
-            function() {},
-            function(error) {
+        book.save(null, { useMasterKey: true ,
+            success: function (bk) {
+                console.log("book.saved: "+bk.bookId);
+                sendBookSavedEmail(bk);
+            },
+
+            error: function(error) {
                 console.log("book.save failed: " + error);
                 response.error("book.save failed: " + error);
-            }
-        );
+        }});
     }, error: function(object, error) {
         console.log("get error: " + error);
     }});
@@ -746,7 +749,7 @@ Parse.Cloud.define("setupTables", function(request, response) {
     });
 });
 
-Parse.Cloud.define("sendEmail", function(request, response) {
+/*Parse.Cloud.define("sendEmail", function(request, response) {
     // TODO get this working for a little protection from spamming
     // if (!request.user) {
     //     response.error('Error: must be logged in to call sendEmail');
@@ -781,7 +784,7 @@ Parse.Cloud.define("sendEmail", function(request, response) {
         sgToAddress = new helper.Email(toAddress);
         mail = new helper.Mail(sgFromAddress, subject, sgToAddress, sgContent);
     }
-        
+
     const sg = require('sendgrid')(process.env.SENDGRID_API_KEY);
     const sgRequest = sg.emptyRequest({
         method: 'POST',
@@ -803,9 +806,12 @@ Parse.Cloud.define("sendEmail", function(request, response) {
     response.success('Sent');
 });
 
+
+
+
 function getReportBookMail(sgFromAddress, sgContent, book) {
     // Don't set the 'to' here.
-    // It must be set in the personalization (below), and if we set both, two emails are sent.    
+    // It must be set in the personalization (below), and if we set both, two emails are sent.
     const helper = require('sendgrid').mail;
     const mail = new helper.Mail();
     mail.setFrom(sgFromAddress);
@@ -823,8 +829,81 @@ function getReportBookMail(sgFromAddress, sgContent, book) {
     mail.addPersonalization(personalization);
 
     return mail;
-}
+}*/
 
 function getBookUrl(book) {
     return "http://www.bloomlibrary.org/browse/detail/" + book.objectId;
+}
+
+
+// This clowd function is called by the BloomLibrary client page when
+// a user has filled out the form to report a concern about a book.
+// We use their address as the from (via sendgrid) and use their message
+// as part of the body. This goes into a template which adds other information
+// about the book. The email goes to our internal address for handling concerns,
+// set by an appsetting in azure.
+Parse.Cloud.define("sendConcernEmail", function(request, response) {
+    var sendgridLibrary = require('sendgrid');
+    const helper = sendgridLibrary.mail;
+    const mail = new helper.Mail();
+    mail.setFrom(new helper.Email(request.params.fromAddress));
+    mail.setSubject('book concern'); // Will be replaced by template
+    mail.addContent(request.params.content);
+    mail.setTemplateId('5840534b-3c8c-4871-9f9a-c6d07fb52fae');  // Report a Book
+    sendEmailAboutBook(book, mail,process.env.EMAIL_REPORT_BOOK);
+
+    //TODO: we need a way to handle a failed attempt to send and get it into the
+    //response body. Probably sendEmailAboutBook needs a callback mechanism.
+});
+
+Parse.Cloud.define("testBookSaved", function(request, response) {
+    var book = {'title':'the title','uploader':'the uploader','copyright':'the copyright','license':'the license', bookId:'theBookId'};
+    sendBookSavedEmail(book);
+});
+// This email is sent when a book is uploaded or created.
+// It is sent to an internal address, set by an appsetting in azure.
+function sendBookSavedEmail(book) {
+    var sendgridLibrary = require('sendgrid');
+    const helper = sendgridLibrary.mail;
+    const mail = new helper.Mail();
+    mail.setFrom(new helper.Email('bot@bloomlibrary.org', 'Bloom Bot'));
+    mail.setSubject('book saved'); // Will be replaced by template
+    mail.addContent('dummy content'); // Will be replaced by template
+    mail.setTemplateId('cdfea777-a9d7-49bc-8fd4-26c49b773b13'); // Announce Book Uploaded
+    sendEmailAboutBook(book, mail, process.env.EMAIL_BOOK_EVENT_RECIPIENT);
+}
+
+// Caller should have already filled in the from, to, subject, and content.
+// This adds metedata about the book and sends off the email.
+function sendEmailAboutBook(book, sendGridMail, toAddress) {
+    var sendgridLibrary = require('sendgrid');
+    const helper = sendgridLibrary.mail;
+    //provide the parameters for the template
+    const personalization = new helper.Personalization();
+    personalization.addTo(new helper.Email(toAddress)); // this is how you set the "to" address.
+    personalization.addSubstitution(new helper.Substitution(':url', getBookUrl(book)));
+    ['title','uploader','copyright','license'].forEach(function(property) {
+        personalization.addSubstitution(new helper.Substitution(':'+property, book[property]));
+    }, this);
+    sendGridMail.addPersonalization(personalization);
+
+    const sendGridInstance = sendgridLibrary(process.env.SENDGRID_API_KEY);
+    const request = sendGridInstance.emptyRequest({
+        method: 'POST',
+        path: '/v3/mail/send',
+        body: sendGridMail.toJSON()
+    });
+    console.log("Will be sending to SendGrid: "+JSON.stringify(request));
+
+    //todo: currently fails here
+    sendGridInstance.API(request, function(error, response) {
+        if (error) {
+            console.log('Sendgrid emptyRequest returned error: ' + error.toJSON);
+            console.log(response.statusCode);
+            console.log(response.body);
+            console.log(response.headers);
+        } else {
+            console.log("Sendgrid 'Announce Book Uploaded' completed");
+        }
+    });
 }
