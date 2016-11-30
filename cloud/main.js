@@ -299,6 +299,14 @@ Parse.Cloud.beforeSave("books", function(request, response) {
         request.object.unset("updateSource");
     }
 
+    // Bloom 3.6 and earlier set the authors field.
+    // For an unknown reason, when we migrated to parse server from parse.com,
+    // we started getting an error because uploading a book was trying to add 
+    // 'authors' as a new field, but it didn't have permission to do so.
+    // So we simply unset the field here, and now we don't
+    // need to have the authors field in the schema. (BL-4001)
+    request.object.unset("authors");
+
     var tags = book.get("tags");
     var search = book.get("title").toLowerCase();
     var index;
