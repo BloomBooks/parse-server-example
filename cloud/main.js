@@ -720,15 +720,15 @@ Parse.Cloud.define("setupTables", function(request, response) {
     var deleteOne = function() {
         // Now we're done, the class and fields must exist; we don't actually want the instances
         var newObj = classes[ic].parseObject;
-        newObj.destroy({success: function () {
-            ic++;
-            if (ic < classes.length) {
-                deleteOne(); // recursive loop
-            }
-            else {
-                cleanup();
-            }
-        },
+        newObj.destroy({useMasterKey: true,
+            success: function () {
+                ic++;
+                if (ic < classes.length) {
+                    deleteOne(); // recursive loop
+                } else {
+                    cleanup();
+                }
+            },
             error: function (error) {
                 response.error(error);
             }
@@ -752,8 +752,10 @@ Parse.Cloud.define("setupTables", function(request, response) {
                 version.save(null, { useMasterKey: true,
                     success: function () {
                         // Finally destroy the spurious user we made.
-                        aUser.destroy({success: function () {
-                            response.success("setupTables ran to completion.");                        },
+                        aUser.destroy({useMasterKey: true,
+                            success: function () {
+                                response.success("setupTables ran to completion.");
+                            },
                             error: function (error) {
                                 response.error(error);
                             }
