@@ -50,7 +50,7 @@ Parse.Cloud.define('testDB', function(req, res) {
 Parse.Cloud.define("populateSearch", function(request, response) {
     // Set up to modify user data
     // Parse.Cloud.useMasterKey();
-    console.log('entering parse-server-example main.js define populateSearch');
+    console.log('entering bloom-parse-server main.js define populateSearch');
     var counter = 0;
     // Query for all books
     var query = new Parse.Query('books');
@@ -92,7 +92,7 @@ Parse.Cloud.define("populateSearch", function(request, response) {
 Parse.Cloud.define("removeUnusedLanguages", function(request, response) {
     // Set up to modify data
     //Parse.Cloud.useMasterKey();
-    console.log('entering parse-server-example main.js define removeUnusedLanguages');
+    console.log('entering bloom-parse-server main.js define removeUnusedLanguages');
 
     var allLangQuery = new Parse.Query('language');
     allLangQuery.find().then(function (languages) {
@@ -132,7 +132,7 @@ Parse.Cloud.define("removeUnusedLanguages", function(request, response) {
 //curl -X POST -H "X-Parse-Application-Id: <insert ID>"  -H "X-Parse-Master-Key: <insert Master key>" -d "{}" https://api.parse.com/1/jobs/populateCounts
 Parse.Cloud.define("populateCounts", function(request, response) {
     //Parse.Cloud.useMasterKey();
-    console.log('entering parse-server-example main.js define populateCounts');
+    console.log('entering bloom-parse-server main.js define populateCounts');
 
     var counters = { language: {}, tag: {}};
 
@@ -289,7 +289,7 @@ Parse.Cloud.define("populateCounts", function(request, response) {
 Parse.Cloud.beforeSave("books", function(request, response) {
     var book = request.object;
 
-    console.log('entering parse-server-example main.js beforeSave books');
+    console.log('entering bloom-parse-server main.js beforeSave books');
 
     // If updateSource is not set, the new/updated record came from the desktop application
     var updateSource = request.object.get("updateSource");
@@ -299,13 +299,15 @@ Parse.Cloud.beforeSave("books", function(request, response) {
         request.object.unset("updateSource");
     }
 
-    // Bloom 3.6 and earlier set the authors field.
-    // For an unknown reason, when we migrated to parse server from parse.com,
-    // we started getting an error because uploading a book was trying to add 
+    // Bloom 3.6 and earlier set the authors field, but apparently, because it
+    // was null or undefined, parse.com didn't try to add it as a new field.
+    // When we migrated from parse.com to parse server,
+    // we started getting an error because uploading a book was trying to add
     // 'authors' as a new field, but it didn't have permission to do so.
-    // So we simply unset the field here, and now we don't
-    // need to have the authors field in the schema. (BL-4001)
-    request.object.unset("authors");
+    // In theory, we could just unset the field here:
+    // request.object.unset("authors"),
+    // but that doesn't prevent the column from being added, either.
+    // Unfortunately, that means we simply had to add authors to the schema. (BL-4001)
 
     var tags = book.get("tags");
     var search = book.get("title").toLowerCase();
@@ -394,7 +396,7 @@ Parse.Cloud.afterSave("books", function(request) {
 
 Parse.Cloud.afterSave("downloadHistory", function(request) {
     //Parse.Cloud.useMasterKey();
-    console.log('entering parse-server-example main.js afterSave downloadHistory');
+    console.log('entering bloom-parse-server main.js afterSave downloadHistory');
     var entry = request.object;
     var bookId = entry.get('bookId');
 
@@ -420,7 +422,7 @@ Parse.Cloud.afterSave("downloadHistory", function(request) {
 // Currently this is those in the Featured bookshelf, followed by all the others.
 // Each group is sorted alphabetically by title.
 Parse.Cloud.define("defaultBooks", function(request, response) {
-    console.log('parse-server-example main.js define defaultBooks function');
+    console.log('bloom-parse-server main.js define defaultBooks function');
     var first = request.params.first;
     var count = request.params.count;
     var includeOutOfCirculation = request.params.includeOutOfCirculation;
@@ -517,12 +519,14 @@ Parse.Cloud.define("setupTables", function(request, response) {
     // This is because the way we 'create' a field is to create an instance of the class that has that field.
     // These instances can also be conveniently used as targets when creating instances of classes
     // that refer to them.
-    console.log('parse-server-example main.js define setupTables function');
+    console.log('bloom-parse-server main.js define setupTables function');
     var classes = [
         {
             name: "books",
             fields: [
                 {name: "allTitles", type:"String"},
+                // For why the 'authors' field is needed, see http://issues.bloomlibrary.org/youtrack/issue/BL-4001
+                {name: "authors", type:"Array"},
                 {name: "baseUrl", type:"String"},
                 {name: "bookInstanceId", type:"String"},
                 {name: "bookLineage", type:"String"},
