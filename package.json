@@ -1,11 +1,11 @@
 {
-  "name": "parse-server-example",
+  "name": "bloom-parse-server",
   "version": "1.4.0",
-  "description": "An example Parse API server using the parse-server module",
+  "description": "Parse server for bloomlibrary.org",
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ParsePlatform/parse-server-example"
+    "url": "https://github.com/BloomBooks/bloom-parse-server"
   },
   "license": "MIT",
   "dependencies": {
@@ -14,7 +14,8 @@
     "parse": "~1.8.0",
     "parse-server": "~2.2.12",
     "parse-server-sendgrid-adapter": "^1.0.0",
-    "sendgrid": "^4.7.1"
+    "sendgrid": "^4.7.1",
+    "parse-dashboard": "^1.0.11"
   },
   "scripts": {
     "start": "node index.js"

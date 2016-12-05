@@ -17,24 +17,13 @@ Here is the full [Parse Server guide](https://github.com/ParsePlatform/parse-ser
 
 1. Give mongodb a blank directory to work with, and run it:
 
-    `mongod.exe --dbpath x:\temp\mongodata`
+    `mongod.exe --dbpath c:\temp\mongodata`
 
 1. Start up this server:
 
     `npm start`
 
     Or, to debug, open bloom-parse-server in vscode, F5 (Debug: Launch via NPM). Note that this sets the masterid to "123", via an environment variable.
-
-    To verify that it is running, open a browser to http://localhost:1337/test
-
-1. Run Parse Dashboard:
-
-    ```
-    npm install parse-dashboard --global
-    parse-dashboard --appId myAppId --masterKey "123" --serverURL http://localhost:1337/parse
-    ```
-
-    This will respond that it is available at http://0.0.0.0, but actually it is at http://localhost.
 
 1. Setup or update the mongodb Schema
 
@@ -47,6 +36,13 @@ Here is the full [Parse Server guide](https://github.com/ParsePlatform/parse-ser
 
     and see the tables in the dashboard.
 
+1. Run Parse Dashboard:
+
+    Go to [http://localhost:1337/dashboard] (http://localhost:1337/dashboard)
+
+    You will be required to log in:
+        The username is the appId ('myAppId')
+        The password is the masterKey ('123')
 
 ### Sample Queries
 
