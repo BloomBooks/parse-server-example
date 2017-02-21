@@ -137,7 +137,7 @@ Parse.Cloud.define("populateCounts", function(request, response) {
     }).then(function() {
         //Create a book query
         var bookQuery = new Parse.Query('books');
-        bookQuery.limit(1000); // default 100; unfortunately cannot set higher than 1000; need to do repeat queries to handle.
+        bookQuery.limit(1000000); // default is 100, supposedly. We want all of them.
 
         //Analyze a book's tags and languages and increment proper counts
         function incrementBookUsageCounts(books, index) {
@@ -182,20 +182,25 @@ Parse.Cloud.define("populateCounts", function(request, response) {
                 //Resolved promise
                 return Parse.Promise.as();
             }
-            else if(tags[index] in counters.tag) {
-                counters.tag[tags[index]]++;
+
+            var tagName = tags[index];
+            if (tagName.indexOf(':') < 0) {
+                // In previous versions of Bloom, topics came in without the "topic:" prefix
+                tagName = 'topic:' + tagName;
+            }
+            if (tagName in counters.tag) {
+                counters.tag[tagName]++;
                 //Next tag
                 return incrementTagUsageCount(tags, index + 1);
-            }
-            else {
+            } else {
                 //If tag is not one already in the database, add the tag to the database
-                counters.tag[tags[index]] = 1;
+                counters.tag[tagName] = 1;
                 var parseClass = Parse.Object.extend('tag');
                 var newTag = new parseClass();
-                newTag.set("name", tags[index]);
+                newTag.set("name", tagName);
                 return newTag.save(null, { useMasterKey: true }).then(
                     function() {
-                        console.log("created tag " + tags[index]);
+                        console.log("created tag " + tagName);
                         //Next tag
                         return incrementTagUsageCount(tags, index + 1);
                     },
@@ -255,8 +260,7 @@ Parse.Cloud.define("populateCounts", function(request, response) {
                 }
                 ,
                 function(error) { console.log("item.save failed: " + error); response.error("item.save failed: " + error); });
-            }
-            else {
+            } else {
                 //Destroy tag with count of 0
                 return item.destroy().then(function() {
                     return setTagUsageCount(data, index + 1);
@@ -307,9 +311,24 @@ Parse.Cloud.beforeSave("books", function(request, response) {
     var index;
     if (tags) {
         for (index = 0; index < tags.length; ++index) {
-            search = search + " " + tags[index].toLowerCase();
+            var tagName = tags[index];
+            var indexOfColon = tagName.indexOf(":");
+            if (indexOfColon < 0) {
+                // In previous versions of Bloom, topics came in without the "topic:" prefix
+                tagName = "topic:" + tagName;
+                indexOfColon = "topic:".length - 1;
+            }
+            // We only want to put the relevant information from the tag into the search string.
+            // i.e. for region:Asia, we only want Asia. We also exclude system tags.
+            if (tagName.startsWith("system:"))
+                continue;
+            var tagNameForSearch = tagName;
+            if (indexOfColon > 0)
+                tagNameForSearch = tagName.substr(indexOfColon + 1);
+            search = search + " " + tagNameForSearch.toLowerCase();
         }
     }
+    request.object.set("tags", tags);
     request.object.set("search", search);
 
     var creator = request.user;
@@ -429,7 +448,7 @@ Parse.Cloud.define("defaultBooks", function(request, response) {
     if (!allLicenses)
         contentQuery.startsWith("license", "cc-");
     contentQuery.ascending("title");
-    contentQuery.limit(1000); // max allowed...hoping no more than 1000 books in shelf??
+    contentQuery.limit(1000000); // default is 100, supposedly. We want all of them.
     contentQuery.find({
         success: function(shelfBooks) {
             var results = [];
