@@ -91,7 +91,14 @@ Parse.Cloud.define("removeUnusedLanguages", function(request, response) {
                     return bookQuery.count().then(function (count) {
                         if (count === 0) {
                             console.log("Deleting language " + lang.get('name') + " because no books use it.");
-                            return lang.destroy();
+                            return lang.destroy({useMasterKey: true,
+                                success: function () {
+                                    console.log("Deletion successful.");
+                                },
+                                error: function (error) {
+                                    console.log("Deletion failed: " + error);
+                                }
+                            });
                         }
                     });
                 });
