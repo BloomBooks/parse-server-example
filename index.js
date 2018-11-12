@@ -1,5 +1,6 @@
 var express = require('express');
 var ParseServer = require('parse-server').ParseServer;
+var path = require('path');
 var ParseDashboard = require('parse-dashboard');
 var SimpleSendGridAdapter = require('parse-server-sendgrid-adapter');
 
@@ -9,21 +10,28 @@ if (!databaseUri) {
   console.log('DATABASE_URI not specified, falling back to localhost.');
 }
 
+var serverUrl = process.env.SERVER_URL || 'http://localhost:1337/parse';
+
 var serverConfig = {
   databaseURI: databaseUri || 'mongodb://localhost:27017/dev',
   cloud: process.env.CLOUD_CODE_MAIN || __dirname + '/cloud/main.js',
   appId: process.env.APP_ID || 'myAppId',
   masterKey: process.env.MASTER_KEY || '123',
-  serverURL: process.env.SERVER_URL || 'http://localhost:1337/parse',
+  serverURL: serverUrl,
 
   //password reset
   emailAdapter: SimpleSendGridAdapter({
-    apiKey: process.env.SENDGRID_API_KEY,
+    apiKey: process.env.SENDGRID_API_KEY || '',
     fromAddress: 'reset@bloomlibrary.org',
   }),
   publicServerURL: process.env.publicServerURL || 'http://localhost:1337/parse', // apparently used by password reset emailer
   verifyUserEmails:true,
-  appName: process.env.APP_NAME || 'BloomLibrary.org'
+  appName: process.env.APP_NAME || 'BloomLibrary.org',
+
+  //See IMPORTANT comment in public/choose-password.html
+  customPages: {
+      choosePassword: getChoosePasswordUrl(serverUrl) || 'http://localhost:1337/choose-password'
+  }
 };
 var api = new ParseServer(serverConfig);
 // Client-keys like the javascript key or the .NET key are not necessary with parse-server
@@ -58,6 +66,10 @@ var app = express();
 var mountPath = process.env.PARSE_MOUNT || '/parse';
 app.use(mountPath, api);
 
+app.get('/choose-password', function(req, res) {
+    res.sendFile(path.join(__dirname, '/public/choose-password.html'));
+})
+
 app.use('/dashboard', dashboard);
 
 var port = process.env.PORT || 1337;
@@ -65,3 +77,10 @@ var httpServer = require('http').createServer(app);
 httpServer.listen(port, function() {
     console.log('bloom-parse-server running on port ' + port + '.');
 });
+
+function getChoosePasswordUrl(serverUrl) {
+    var idx = serverUrl.indexOf('/parse');
+    if (idx >= 0)
+        return serverUrl.substring(0, idx) + '/choose-password';
+    return serverUrl;
+}
