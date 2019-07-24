@@ -289,8 +289,10 @@ Parse.Cloud.beforeSave("books", function(request, response) {
     var updateSource = request.object.get("updateSource");
     if (!updateSource) {
         book.addUnique("tags", "system:Incoming");
+        request.object.set("harvestState", "New");
     } else {
         request.object.unset("updateSource");
+        request.object.set("harvestState", "Updated");
     }
 
     // Bloom 3.6 and earlier set the authors field, but apparently, because it
