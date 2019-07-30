@@ -285,11 +285,35 @@ Parse.Cloud.beforeSave("books", function(request, response) {
 
     console.log('entering bloom-parse-server main.js beforeSave books');
 
-    // If updateSource is not set, the new/updated record came from the desktop application
+    // The original purpose of the updateSource field was so we could set system:Incoming on every book
+    // when it is uploaded or reuploaded from BloomDesktop without doing so for changes from the datagrid.
+    //
+    // A beforeSave event for book could occur from at least one of these sources:
+    // * BloomDesktop upload or reupload
+    // * Bloomlibrary.org datagrid
+    // * Bloom harvester
+    // * parse dashboard
+    //
+    // BloomDesktop does not set updateSource -- old Blooms weren't/aren't setting it, so adding it now doesn't help much
+    // Bloomlibrary.org datagrid sets updateSource to datagrid or datagrid (admin)
+    // Bloom harvester sets it to bloomHarvester
+    // parse dashboard also does not set it -- which was an oversight in the design but also has no obvious solution
+    //
+    // Now, we also want to set the harvestState field to "New" or "Updated" when a book is uploaded or reuploaded.
+    // So, if there is no updateSource, and the book doesn't exist, set to "New".
+    // If there is no updateSource, and the book does exist, set to "Updated".
+    // Unfortunately, this will also happen when changes are made to rows directly through the parse dashboard.
     var updateSource = request.object.get("updateSource");
     if (!updateSource) {
+        // Assume (see caveat above) change came from BloomDesktop upload (or reupload)
         book.addUnique("tags", "system:Incoming");
+        if (request.object.isNew()) {
+            request.object.set("harvestState", "New");
+        } else {
+            request.object.set("harvestState", "Updated");
+        }
     } else {
+        // We never want to leave the value set in the database or our logic (described above) won't work
         request.object.unset("updateSource");
     }
 
