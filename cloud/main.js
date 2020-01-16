@@ -159,6 +159,65 @@ Parse.Cloud.define("removeUnusedLanguages", function(request, response) {
         );
 });
 
+// This job will remove any bookshelf records which currently do not have any books which use them.
+// The purpose is to keep BloomLibrary.org from displaying bookshelves with no books.
+// This is scheduled on Azure under bloom-library-maintenance.
+// You can also run it manually via REST:
+// curl -X POST -H "X-Parse-Application-Id: <insert app ID>" -H "X-Parse-Master-Key: <insert master key>" -d '{}' https://bloom-parse-server-develop.azurewebsites.net/parse/functions/removeUnusedBookshelves
+// (In theory, the -d '{}' shouldn't be needed because we are not passing any parameters, but it doesn't work without it.)
+Parse.Cloud.define("removeUnusedBookshelves", function(request, response) {
+    console.log("entering bloom-parse-server main.js removeUnusedBookshelves");
+
+    var allShelvesQuery = new Parse.Query("bookshelf");
+    allShelvesQuery.limit(1000000); // default is 100, supposedly. We want all of them.
+    allShelvesQuery
+        .find()
+        .then(function(shelves) {
+            var promise = Parse.Promise.as();
+            for (var i = 0; i < shelves.length; i++) {
+                // Use IIFE to pass the correct bookshelf down
+                (function() {
+                    var shelf = shelves[i];
+                    var bookQuery = new Parse.Query("books");
+                    bookQuery.equalTo("tags", "bookshelf:" + shelf.get("key"));
+                    promise = promise.then(function() {
+                        return bookQuery.count().then(function(count) {
+                            if (count === 0) {
+                                console.log(
+                                    "Deleting bookshelf " +
+                                        shelf.get("key") +
+                                        " because no books use it."
+                                );
+                                return shelf.destroy({
+                                    useMasterKey: true,
+                                    success: function() {
+                                        console.log("Deletion successful.");
+                                    },
+                                    error: function(error) {
+                                        console.log(
+                                            "Deletion failed: " + error
+                                        );
+                                    }
+                                });
+                            }
+                        });
+                    });
+                })();
+            }
+            return promise;
+        })
+        .then(
+            function() {
+                response.success(
+                    "removeUnusedBookshelves completed successfully."
+                );
+            },
+            function(error) {
+                response.error("Error in removeUnusedBookshelves: " + error);
+            }
+        );
+});
+
 // A background job to populate usageCounts for languages and tags
 // This is scheduled on Azure under bloom-library-maintenance.
 // You can also run it manually via REST:
@@ -434,43 +493,45 @@ Parse.Cloud.beforeSave("books", function(request, response) {
 });
 
 Parse.Cloud.afterSave("books", function(request) {
-    const bookshelfPrefix = "bookshelf:";
-    var book = request.object;
-    book.get("tags")
-        .filter(function(element) {
-            return element.indexOf(bookshelfPrefix) > -1;
-        })
-        .map(function(element) {
-            return element.substr(bookshelfPrefix.length);
-        })
-        .forEach(function(key) {
-            var Bookshelf = Parse.Object.extend("bookshelf");
-            var query = new Parse.Query(Bookshelf);
-            query.equalTo("key", key);
-            query.count({
-                success: function(count) {
-                    if (count == 0) {
-                        //Create a new bookshelf to contain this book with default properties
-                        var bookshelf = new Bookshelf();
-                        bookshelf.set("key", key);
-                        bookshelf.set("englishName", key);
-                        bookshelf.set("normallyVisible", false);
-                        bookshelf.save(null, { useMasterKey: true }).then(
-                            function() {},
-                            function(error) {
-                                console.log("bookshelf.save failed: " + error);
-                                response.error(
-                                    "bookshelf.save failed: " + error
-                                );
-                            }
-                        );
-                    }
-                },
-                error: function(error) {
-                    console.log("get error: " + error);
-                }
-            });
-        });
+    // We no longer wish to automatically create bookshelves.
+    // It is too easy for a user (or even us mistakenly) to create them.
+    // const bookshelfPrefix = "bookshelf:";
+    // var book = request.object;
+    // book.get("tags")
+    //     .filter(function(element) {
+    //         return element.indexOf(bookshelfPrefix) > -1;
+    //     })
+    //     .map(function(element) {
+    //         return element.substr(bookshelfPrefix.length);
+    //     })
+    //     .forEach(function(key) {
+    //         var Bookshelf = Parse.Object.extend("bookshelf");
+    //         var query = new Parse.Query(Bookshelf);
+    //         query.equalTo("key", key);
+    //         query.count({
+    //             success: function(count) {
+    //                 if (count == 0) {
+    //                     //Create a new bookshelf to contain this book with default properties
+    //                     var bookshelf = new Bookshelf();
+    //                     bookshelf.set("key", key);
+    //                     bookshelf.set("englishName", key);
+    //                     bookshelf.set("normallyVisible", false);
+    //                     bookshelf.save(null, { useMasterKey: true }).then(
+    //                         function() {},
+    //                         function(error) {
+    //                             console.log("bookshelf.save failed: " + error);
+    //                             response.error(
+    //                                 "bookshelf.save failed: " + error
+    //                             );
+    //                         }
+    //                     );
+    //                 }
+    //             },
+    //             error: function(error) {
+    //                 console.log("get error: " + error);
+    //             }
+    //         });
+    //     });
 
     try {
         //send email if this didn't exist before
