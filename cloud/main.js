@@ -339,6 +339,9 @@ Parse.Cloud.define("populateCounts", function(request, response) {
                     function(error) {
                         console.log("item.save failed: " + error);
                         response.error("item.save failed: " + error);
+
+                        //Next language
+                        return setLangUsageCount(data, index + 1);
                     }
                 );
             }
@@ -356,27 +359,49 @@ Parse.Cloud.define("populateCounts", function(request, response) {
             function setTagUsageCount(data, index) {
                 //Return resolved promise when done
                 if (index >= data.length) {
+                    request.log.info(`Processed ${data.length} tags.`);
                     return Parse.Promise.as();
                 }
 
                 var item = data[index];
-                var count = counters.tag[item.get("name")];
+                var tagName = item.get("name");
+                var count = counters.tag[tagName];
                 if (count > 0) {
                     item.set("usageCount", count);
                     return item.save(null, { useMasterKey: true }).then(
                         function() {
+                            // Next tag
                             return setTagUsageCount(data, index + 1);
                         },
                         function(error) {
-                            console.log("item.save failed: " + error);
-                            response.error("item.save failed: " + error);
+                            console.log(`tag ${tagName} save failed: ${error}`);
+                            response.error(
+                                `tag ${tagName} save failed: ${error}`
+                            );
+
+                            // Next tag
+                            return setTagUsageCount(data, index + 1);
                         }
                     );
                 } else {
                     //Destroy tag with count of 0
-                    return item.destroy().then(function() {
-                        return setTagUsageCount(data, index + 1);
-                    });
+                    return item.destroy({ useMasterKey: true }).then(
+                        function() {
+                            // Next tag
+                            return setTagUsageCount(data, index + 1);
+                        },
+                        function(error) {
+                            console.log(
+                                `tag ${tagName} destroy failed: ${error}`
+                            );
+                            response.error(
+                                `tag ${tagName} destroy failed: ${error}`
+                            );
+
+                            // Next tag
+                            return setTagUsageCount(data, index + 1);
+                        }
+                    );
                 }
             }
 
