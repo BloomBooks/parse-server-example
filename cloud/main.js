@@ -1069,12 +1069,13 @@ Parse.Cloud.define("setupTables", function(request, response) {
 // have a verified email address."
 Parse.Cloud.define("bloomLink", async function(request, response) {
     var id = request.params.id;
-    //console.log("request: " + JSON.stringify(request));
+    console.log(" bloomLink with request: " + JSON.stringify(request));
     const query = new Parse.Query("User");
     query.equalTo("username", id);
     const results = await query.find({ useMasterKey: true });
     let user;
     if (results.length == 0) {
+        console.log("User not found in bloomLink: " + id);
         // We need a new parse user to correspond to the auth0 credentials.
         // We want to make a user with the specified ID. The standard approach
         // to making a user with the specified authData produces a random ID.
@@ -1086,30 +1087,48 @@ Parse.Cloud.define("bloomLink", async function(request, response) {
             .toString(36)
             .slice(-10);
         user = await Parse.User.signUp(id, pw, { email: id });
-        //console.log("signed up " + JSON.stringify(user));
+        console.log("signed up " + JSON.stringify(user));
     } else {
         user = results[0];
     }
-    //console.log("got user " + JSON.stringify(user));
+    console.log("bloomLink got user " + JSON.stringify(user));
     const token = request.params.token;
     // Note: at one point I set the id field from user.username. That ought to be
     // the same as id, since we searched for and if necessary created a user with that
     // username. In fact, however, it was always undefined.
     const authData = { bloom: { id: id, token: token } };
-    //console.log("authdata from params: " + JSON.stringify(authData));
+    console.log("bloomLink authdata from params: " + JSON.stringify(authData));
+
+    // The user object we get is in some bizarre state where stringify indicates it
+    // has an authData property, but user.authData is null. This stringify/parse
+    // convert it into a conventional object that works as expected.
+    user = JSON.parse(JSON.stringify(user));
+    console.log(
+        "bloomLink authdata from user: " + JSON.stringify(user.authData)
+    );
+
     if (!user.authData) {
-        //console.log("setting user authdata");
+        console.log(
+            "bloomLink setting user authdata to " + JSON.stringify(authData)
+        );
         user.set("authData", authData, { useMasterKey: true });
         user.save(null, { useMasterKey: true }).then(
             () => {
-                //console.log("user: " + JSON.stringify(user));
+                console.log("bloomLink saved user: " + JSON.stringify(user));
                 response.success("did it!");
             },
             error => {
+                console.log(
+                    "bloomLink failed to save " + JSON.stringify(error)
+                );
                 response.error(error);
             }
         );
     } else {
+        console.log(
+            "bloomLink found existing authData: " +
+                JSON.stringify(user.authData)
+        );
         response.success("existing");
     }
     // Instead of one of the two success responses above, we should now be able to log

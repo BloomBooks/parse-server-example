@@ -2,6 +2,7 @@ const Parse = require("parse/node").Parse;
 const httpsRequest = require("./httpsRequest");
 const NodeRSA = require("node-rsa");
 const jwt = require("jsonwebtoken");
+const admin = require("firebase-admin");
 
 // This adapter, modified from the 'apple' one in parse-server, validates a user when
 // presented with a valid, current auth0 token from the appropriate domain whose email
@@ -19,11 +20,12 @@ const jwt = require("jsonwebtoken");
 // To find the key, go to https://experiment-bloomlibrary.auth0.com/.well-known/openid-configuration,
 // and look for the issuer field. Probably always just our domain.
 const TOKEN_ISSUER =
-    process.env.APP_ID === "R6qNTeumQXjJCMutAJYAwPtip1qBulkFyLefkCE5"
-        ? "https://languagetechnology.auth0.com/"
-        : process.env.APP_ID === "yrXftBF6mbAuVu3fO6LnhCJiHxZPIdE7gl1DUVGR"
-        ? "https://dev-sillsdev.auth0.com/"
-        : "https://experiment-bloomlibrary.auth0.com/";
+    "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";
+// process.env.APP_ID === "R6qNTeumQXjJCMutAJYAwPtip1qBulkFyLefkCE5"
+//     ? "https://languagetechnology.auth0.com/"
+//     : process.env.APP_ID === "yrXftBF6mbAuVu3fO6LnhCJiHxZPIdE7gl1DUVGR"
+//     ? "https://dev-sillsdev.auth0.com/"
+//     : "https://experiment-bloomlibrary.auth0.com/";
 
 let currentKey;
 
@@ -31,14 +33,16 @@ const getPublicKey = async () => {
     let data;
     try {
         // See https://auth0.com/docs/tokens/guides/jwt/use-jwks for the structure of this.
-        data = await httpsRequest.get(TOKEN_ISSUER + ".well-known/jwks.json");
+        data = await httpsRequest.get(TOKEN_ISSUER);
     } catch (e) {
         if (currentKey) {
             return currentKey;
         }
+        console.log("failed to get public key token " + JSON.stringify(e));
         throw e;
     }
 
+    console.log("getPublicKey got " + JSON.stringify(data));
     // Enhance: according to https://auth0.com/docs/tokens/guides/jwt/use-jwks, there could be
     // more than one public key. The article doesn't say what to do about it if so; my guess is
     // that the JWT is considered valid if any of the current signing keys decrypts it successfully.
@@ -55,6 +59,8 @@ const getPublicKey = async () => {
     return currentKey;
 };
 
+let doneFirebaseInit = false;
+
 const verifyIdToken = async ({ token, id }, clientID) => {
     if (!token) {
         throw new Parse.Error(
@@ -62,22 +68,49 @@ const verifyIdToken = async ({ token, id }, clientID) => {
             "id token is invalid for this user."
         );
     }
+    if (!doneFirebaseInit) {
+        doneFirebaseInit = true;
+        var serviceAccount = require("d:/sil-bloomlibrary-firebase-adminsdk-4cf0u-02622f06e4.json");
+
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+            databaseURL: "https://sil-bloomlibrary.firebaseio.com"
+        });
+
+        // admin.initializeApp({
+        //     credential: admin.credential.applicationDefault(),
+        //     databaseURL: "https://sil-bloomlibrary.firebaseio.com"
+        // });
+    }
+    // idToken comes from the client app
+    let jwtClaims = undefined;
+    try {
+        jwtClaims = await admin.auth().verifyIdToken(token);
+    } catch (error) {
+        console.log("firebaseadmin returned error " + JSON.stringify(error));
+        throw new Parse.Error(
+            Parse.Error.OBJECT_NOT_FOUND,
+            `firebaseadmin could not verify this user ${id}.`
+        );
+    }
+    console.log("firebaseadmin returned " + JSON.stringify(jwtClaims));
     // enhance: according to https://auth0.com/docs/tokens/guides/jwt/use-jwks, it is valid to cache the public key,
     // which rarely changes; but if validation fails the code ought to retrieve it afresh and re-check.
-    const publicKey = await getPublicKey();
+    //const publicKey = await getPublicKey();
 
     // This checks that the token is actually the standard encoding of a Java Web Token
     // and encypted with the appropriate private key and returns it decoded.
     // It will fail appropriately if the token is expired.
-    const jwtClaims = jwt.verify(token, publicKey, {
-        algorithms: "RS256"
-    });
+    // const jwtClaims = jwt.verify(token, publicKey, {
+    //     algorithms: "RS256"
+    // });
 
     // Make sure it was our server that issued the token!
-    if (jwtClaims.iss !== TOKEN_ISSUER) {
+    const tokenSource = "https://securetoken.google.com/sil-bloomlibrary";
+    if (jwtClaims.iss !== tokenSource) {
         throw new Parse.Error(
             Parse.Error.OBJECT_NOT_FOUND,
-            `id token not issued by correct OpenID provider - expected: ${TOKEN_ISSUER} | from: ${jwtClaims.iss}`
+            `id token not issued by correct OpenID provider - expected: ${tokenSource} actually from: ${jwtClaims.iss}`
         );
     }
     // And that it's a token validating the user we're trying to log in!
@@ -99,12 +132,12 @@ const verifyIdToken = async ({ token, id }, clientID) => {
     // This code was present from the apple original. It's probably obsolete,
     // since I don't think the jwtClaims object we get has an aud property,
     // and therefore presume this test isn't being done because clientID is undefined.
-    if (clientID !== undefined && jwtClaims.aud !== clientID) {
-        throw new Parse.Error(
-            Parse.Error.OBJECT_NOT_FOUND,
-            `jwt aud parameter does not include this client - is: ${jwtClaims.aud} | expected: ${clientID}`
-        );
-    }
+    // if (clientID !== undefined && jwtClaims.aud !== clientID) {
+    //     throw new Parse.Error(
+    //         Parse.Error.OBJECT_NOT_FOUND,
+    //         `jwt aud parameter does not include this client - is: ${jwtClaims.aud} | expected: ${clientID}`
+    //     );
+    // }
     return jwtClaims;
 };
 

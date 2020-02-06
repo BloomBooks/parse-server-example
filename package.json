@@ -10,6 +10,7 @@
   "license": "MIT",
   "dependencies": {
     "express": "~4.11.x",
+    "firebase-admin": "^8.9.2",
     "jsonwebtoken": "^8.5.1",
     "kerberos": "~0.0.x",
     "node-rsa": "^1.0.7",
@@ -22,8 +23,6 @@
   "scripts": {
     "start": "node index.js"
   },
-  "//": "NOTE: during azure deployment, this controls what node/npm we get.",
-  "//": "However the node we see in the kudo console is controlled by WEBSITE_NODE_DEFAULT_VERSION in appsettings.",
   "//": "See https://blogs.msdn.microsoft.com/azureossds/2016/04/20/nodejs-and-npm-versions-on-azure-app-services/",
   "engines": {
     "node": "8.10.0",
