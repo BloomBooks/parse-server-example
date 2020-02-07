@@ -34,7 +34,7 @@ const getPublicKeys = async () => {
         throw e;
     }
 
-    console.log("getPublicKey got " + JSON.stringify(data));
+    //console.log("getPublicKeys got " + JSON.stringify(data));
     // data we get from firebase api looks like an object with three keys; the values are the possible public key strings.
     // I don't know what the keys are, but we just need the values. Currently (7 Feb 2020) the third key is the one
     // that actually works on the login I tested, but other cases (perhaps other providers) may use the others,

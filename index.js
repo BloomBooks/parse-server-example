@@ -3,7 +3,7 @@ var ParseServer = require("parse-server").ParseServer;
 var path = require("path");
 var ParseDashboard = require("parse-dashboard");
 var SimpleSendGridAdapter = require("parse-server-sendgrid-adapter");
-var BloomAuth0Adapter = require("./bloomAuth0Adapter.js");
+var BloomFirebaseAuthAdapter = require("./bloomFirebaseAuthAdapter");
 
 var databaseUri = process.env.DATABASE_URI || process.env.MONGODB_URI;
 
@@ -37,7 +37,7 @@ var serverConfig = {
             "http://localhost:1337/choose-password"
     },
 
-    auth: { bloom: BloomAuth0Adapter },
+    auth: { bloom: BloomFirebaseAuthAdapter },
 
     allowClientClassCreation: false
 };
