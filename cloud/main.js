@@ -1069,13 +1069,13 @@ Parse.Cloud.define("setupTables", function(request, response) {
 // have a verified email address."
 Parse.Cloud.define("bloomLink", async function(request, response) {
     var id = request.params.id;
-    console.log(" bloomLink with request: " + JSON.stringify(request));
+    //console.log(" bloomLink with request: " + JSON.stringify(request));
     const query = new Parse.Query("User");
     query.equalTo("username", id);
     const results = await query.find({ useMasterKey: true });
     let user;
     if (results.length == 0) {
-        console.log("User not found in bloomLink: " + id);
+        //console.log("User not found in bloomLink: " + id);
         // We need a new parse user to correspond to the auth0 credentials.
         // We want to make a user with the specified ID. The standard approach
         // to making a user with the specified authData produces a random ID.
@@ -1087,34 +1087,34 @@ Parse.Cloud.define("bloomLink", async function(request, response) {
             .toString(36)
             .slice(-10);
         user = await Parse.User.signUp(id, pw, { email: id });
-        console.log("signed up " + JSON.stringify(user));
+        //console.log("signed up " + JSON.stringify(user));
     } else {
         user = results[0];
     }
-    console.log("bloomLink got user " + JSON.stringify(user));
+    //console.log("bloomLink got user " + JSON.stringify(user));
     const token = request.params.token;
     // Note: at one point I set the id field from user.username. That ought to be
     // the same as id, since we searched for and if necessary created a user with that
     // username. In fact, however, it was always undefined.
     const authData = { bloom: { id: id, token: token } };
-    console.log("bloomLink authdata from params: " + JSON.stringify(authData));
+    //console.log("bloomLink authdata from params: " + JSON.stringify(authData));
 
     // The user object we get is in some bizarre state where stringify indicates it
     // has an authData property, but user.authData is null. This stringify/parse
-    // convert it into a conventional object that works as expected.
+    // converts it into a conventional object that works as expected.
     user = JSON.parse(JSON.stringify(user));
-    console.log(
-        "bloomLink authdata from user: " + JSON.stringify(user.authData)
-    );
+    // console.log(
+    //     "bloomLink authdata from user: " + JSON.stringify(user.authData)
+    // );
 
     if (!user.authData) {
-        console.log(
-            "bloomLink setting user authdata to " + JSON.stringify(authData)
-        );
+        // console.log(
+        //     "bloomLink setting user authdata to " + JSON.stringify(authData)
+        // );
         user.set("authData", authData, { useMasterKey: true });
         user.save(null, { useMasterKey: true }).then(
             () => {
-                console.log("bloomLink saved user: " + JSON.stringify(user));
+                //console.log("bloomLink saved user: " + JSON.stringify(user));
                 response.success("did it!");
             },
             error => {
@@ -1125,17 +1125,17 @@ Parse.Cloud.define("bloomLink", async function(request, response) {
             }
         );
     } else {
-        console.log(
-            "bloomLink found existing authData: " +
-                JSON.stringify(user.authData)
-        );
+        // console.log(
+        //     "bloomLink found existing authData: " +
+        //         JSON.stringify(user.authData)
+        // );
         response.success("existing");
     }
     // Instead of one of the two success responses above, we should now be able to log
     // them in and return a token. That would save the client another http
     // request. But I haven't been able to get it to work. Parse documentation tells
     // how to log in using custom auth with the REST API, but not with the Javascript API.
-    // const linkResult = await user.linkWith(user, authData); // fails, linkWith is not a function
+    // const linkResult = await user.linkWith(user, authData); // fails, linkWith is not a function (even before stringify/parse above)
     // console.log("after login user " + JSON.stringify(user));
     // console.log("after login linkResult " + JSON.stringify(linkResult));
 });
