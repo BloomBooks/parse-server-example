@@ -1091,46 +1091,53 @@ Parse.Cloud.define("bloomLink", async function(request, response) {
     } else {
         user = results[0];
     }
+    response.success("got user");
+    return;
+    // The following code saves authData corresponding to the current token.
+    // However, we don't actually need any: the bloomAuth0Adapter is happy to
+    // authorize any user given a valid firebase authentication token from the
+    // right source, properly encrypted, and for a user with the right email.
+
     //console.log("bloomLink got user " + JSON.stringify(user));
-    const token = request.params.token;
-    // Note: at one point I set the id field from user.username. That ought to be
-    // the same as id, since we searched for and if necessary created a user with that
-    // username. In fact, however, it was always undefined.
-    const authData = { bloom: { id: id, token: token } };
-    //console.log("bloomLink authdata from params: " + JSON.stringify(authData));
+    // const token = request.params.token;
+    // // Note: at one point I set the id field from user.username. That ought to be
+    // // the same as id, since we searched for and if necessary created a user with that
+    // // username. In fact, however, it was always undefined.
+    // const authData = { bloom: { id: id, token: token } };
+    // //console.log("bloomLink authdata from params: " + JSON.stringify(authData));
 
-    // The user object we get is in some bizarre state where stringify indicates it
-    // has an authData property, but user.authData is null. This stringify/parse
-    // converts it into a conventional object that works as expected.
-    user = JSON.parse(JSON.stringify(user));
-    // console.log(
-    //     "bloomLink authdata from user: " + JSON.stringify(user.authData)
-    // );
+    // // The user object we get is in some bizarre state where stringify indicates it
+    // // has an authData property, but user.authData is null. This stringify/parse
+    // // converts it into a conventional object that works as expected.
+    // user = JSON.parse(JSON.stringify(user));
+    // // console.log(
+    // //     "bloomLink authdata from user: " + JSON.stringify(user.authData)
+    // // );
 
-    if (!user.authData) {
-        // console.log(
-        //     "bloomLink setting user authdata to " + JSON.stringify(authData)
-        // );
-        user.set("authData", authData, { useMasterKey: true });
-        user.save(null, { useMasterKey: true }).then(
-            () => {
-                //console.log("bloomLink saved user: " + JSON.stringify(user));
-                response.success("did it!");
-            },
-            error => {
-                console.log(
-                    "bloomLink failed to save " + JSON.stringify(error)
-                );
-                response.error(error);
-            }
-        );
-    } else {
-        // console.log(
-        //     "bloomLink found existing authData: " +
-        //         JSON.stringify(user.authData)
-        // );
-        response.success("existing");
-    }
+    // if (!user.authData) {
+    //     // console.log(
+    //     //     "bloomLink setting user authdata to " + JSON.stringify(authData)
+    //     // );
+    //     user.set("authData", authData, { useMasterKey: true });
+    //     user.save(null, { useMasterKey: true }).then(
+    //         () => {
+    //             //console.log("bloomLink saved user: " + JSON.stringify(user));
+    //             response.success("did it!");
+    //         },
+    //         error => {
+    //             console.log(
+    //                 "bloomLink failed to save " + JSON.stringify(error)
+    //             );
+    //             response.error(error);
+    //         }
+    //     );
+    // } else {
+    //     // console.log(
+    //     //     "bloomLink found existing authData: " +
+    //     //         JSON.stringify(user.authData)
+    //     // );
+    //     response.success("existing");
+    // }
     // Instead of one of the two success responses above, we should now be able to log
     // them in and return a token. That would save the client another http
     // request. But I haven't been able to get it to work. Parse documentation tells
