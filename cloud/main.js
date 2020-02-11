@@ -812,7 +812,8 @@ Parse.Cloud.define("setupTables", function(request, response) {
                 { name: "harvestStartedAt", type: "Date" },
                 { name: "harvestLog", type: "Array" },
                 // End fields required by Harvester
-                { name: "internetLimits", type: "Object" }
+                { name: "internetLimits", type: "Object" },
+                { name: "importedBookSourceUrl", type: "String" }
             ]
         },
         {
