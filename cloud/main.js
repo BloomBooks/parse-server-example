@@ -806,6 +806,8 @@ Parse.Cloud.define("setupTables", function(request, response) {
                 { name: "district", type: "String" },
                 { name: "features", type: "Array" },
                 { name: "publisher", type: "String" },
+                { name: "originalPublisher", type: "String" },
+                { name: "phashOfFirstContentImage", type: "String" },
                 // Fields required by Harvester
                 { name: "harvestState", type: "String" },
                 { name: "harvesterId", type: "String" },
