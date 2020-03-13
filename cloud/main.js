@@ -435,7 +435,6 @@ Parse.Cloud.define("populateCounts", function(request, response) {
 // Makes new and updated books have the right search string and ACL.
 Parse.Cloud.beforeSave("books", function(request, response) {
     var book = request.object;
-
     console.log("entering bloom-parse-server main.js beforeSave books");
 
     // The original purpose of the updateSource field was so we could set system:Incoming on every book
@@ -470,6 +469,28 @@ Parse.Cloud.beforeSave("books", function(request, response) {
         request.object.unset("updateSource");
     }
 
+    // We want to preserve level and topic tags even when books are reuploaded or reimported because
+    // they may have been painfully set by hand for books that didn't provide that information.  So
+    // check the original table row if it exists to see if has values for the level and topic tags.
+    const original = request.original;
+    let oldTags;
+    if (original)
+        oldTags = original.get("tags");
+    let oldLevel;
+    let oldTopic;
+    if (oldTags && oldTags.length > 0) {
+        for (index = 0; index < oldTags.length; ++index) {
+            var tagName = oldTags[index];
+            if (tagName.startsWith("level:")) {
+                oldLevel = tagName;
+            } else if (tagName.startsWith("topic:")) {
+                oldTopic = tagName;
+            }
+        }
+    }
+    let newLevel;
+    let newTopic;
+
     // Bloom 3.6 and earlier set the authors field, but apparently, because it
     // was null or undefined, parse.com didn't try to add it as a new field.
     // When we migrated from parse.com to parse server,
@@ -492,6 +513,11 @@ Parse.Cloud.beforeSave("books", function(request, response) {
                 tags[index] = tagName = "topic:" + tagName;
                 indexOfColon = "topic:".length - 1;
             }
+            if (tagName.startsWith("level:")) {
+                newLevel = tagName;
+            } else if (tagName.startsWith("topic:")) {
+                newTopic = tagName;
+            }
             // We only want to put the relevant information from the tag into the search string.
             // i.e. for region:Asia, we only want Asia. We also exclude system tags.
             // Our current search doesn't handle multi-string searching, anyway, so even if you knew
@@ -500,8 +526,40 @@ Parse.Cloud.beforeSave("books", function(request, response) {
             // Other than 'system:', the prefixes are currently only used to separate out the labels
             // in the sidebar of the browse view.
             if (tagName.startsWith("system:")) continue;
+            if (tagName.toLowerCase() == "level:none") continue;
+            if (tagName.toLowerCase() == "topic:none") continue;
             var tagNameForSearch = tagName.substr(indexOfColon + 1);
             search = search + " " + tagNameForSearch.toLowerCase();
+        }
+        // remove the new (and effectively old) tag if requested by "none" value
+        if (newLevel && newLevel.toLowerCase() == "level:none") {
+            var idx = tags.indexOf(newLevel);
+            tags.splice(idx, 1);
+            oldLevel = null;
+        }
+        if (newTopic && newTopic.toLowerCase() == "topic:none") {
+            var idx = tags.indexOf(newTopic);
+            tags.splice(idx, 1);
+            oldTopic = null;
+        }
+        // restore the old level and topic tags if needed
+        if (oldLevel && !newLevel) {
+            tags.push(oldLevel);
+            let indexOfColon = oldLevel.indexOf(":");
+            search = search + " " + oldLevel.substr(indexOfColon + 1).toLowerCase();
+        }
+        if (oldTopic && !newTopic) {
+            tags.push(oldTopic);
+            let indexOfColon = oldTopic.indexOf(":");
+            search = search + " " + oldTopic.substr(indexOfColon + 1).toLowerCase();
+        }
+    } else if (oldLevel || oldTopic) {
+        tags = [];
+        if (oldLevel) {
+            tags.push(oldLevel);
+        }
+        if (oldTopic) {
+            tags.push(oldTopic);
         }
     }
     request.object.set("tags", tags);
