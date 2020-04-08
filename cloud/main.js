@@ -4,7 +4,8 @@ require("./emails.js"); // allows email-specific could functions to be defined
 // This function will call save on every book. This is useful for
 // applying the functionality in beforeSaveBook to every book,
 // particularly updating the tags and search fields.
-Parse.Cloud.define("saveAllBooks", function(request, response) {
+Parse.Cloud.job("saveAllBooks", function(request) {
+    request.log.info("saveAllBooks - Starting.");
     // Query for all books
     var query = new Parse.Query("books");
     query
@@ -13,20 +14,18 @@ Parse.Cloud.define("saveAllBooks", function(request, response) {
             return book.save(null, { useMasterKey: true }).then(
                 function() {},
                 function(error) {
-                    console.log("book.save failed: " + error);
-                    response.error("book.save failed: " + error);
+                    request.log.error("saveAllBooks - book.save failed: " + error);
                 }
             );
         })
         .then(
             function() {
-                // Set the job's success status
-                response.success("Update completed successfully.");
+                request.log.info("saveAllBooks - Completed successfully.");
             },
             function(error) {
                 // Set the job's error status
-                response.error(
-                    "Uh oh, something went wrong in saveAllBooks: " + error
+                request.log.error(
+                    "saveAllBooks - Terminated with error: " + error
                 );
             }
         );
@@ -36,10 +35,10 @@ Parse.Cloud.define("saveAllBooks", function(request, response) {
 // The purpose is to keep BloomLibrary.org from displaying languages with no books.
 // This is scheduled on Azure under bloom-library-maintenance.
 // You can also run it manually via REST:
-// curl -X POST -H "X-Parse-Application-Id: <insert app ID>" -H "X-Parse-Master-Key: <insert master key>" -d '{}' https://bloom-parse-server-develop.azurewebsites.net/parse/functions/removeUnusedLanguages
+// curl -X POST -H "X-Parse-Application-Id: <insert app ID>" -H "X-Parse-Master-Key: <insert master key>" -d '{}' https://bloom-parse-server-develop.azurewebsites.net/parse/jobs/removeUnusedLanguages
 // (In theory, the -d '{}' shouldn't be needed because we are not passing any parameters, but it doesn't work without it.)
-Parse.Cloud.define("removeUnusedLanguages", function(request, response) {
-    console.log("entering bloom-parse-server main.js removeUnusedLanguages");
+Parse.Cloud.job("removeUnusedLanguages", function(request) {
+    request.log.info("removeUnusedLanguages - Starting.");
 
     var allLangQuery = new Parse.Query("language");
     allLangQuery.limit(1000000); // default is 100, supposedly. We want all of them.
@@ -56,19 +55,19 @@ Parse.Cloud.define("removeUnusedLanguages", function(request, response) {
                     promise = promise.then(function() {
                         return bookQuery.count().then(function(count) {
                             if (count === 0) {
-                                console.log(
-                                    "Deleting language " +
+                                request.log.info(
+                                    "removeUnusedLanguages - Deleting language " +
                                         lang.get("name") +
                                         " because no books use it."
                                 );
                                 return lang.destroy({
                                     useMasterKey: true,
                                     success: function() {
-                                        console.log("Deletion successful.");
+                                        request.log.info("removeUnusedLanguages - Deletion successful.");
                                     },
                                     error: function(error) {
-                                        console.log(
-                                            "Deletion failed: " + error
+                                        request.log.error(
+                                            "removeUnusedLanguages - Deletion failed: " + error
                                         );
                                     }
                                 });
@@ -81,71 +80,12 @@ Parse.Cloud.define("removeUnusedLanguages", function(request, response) {
         })
         .then(
             function() {
-                response.success(
-                    "removeUnusedLanguages completed successfully."
+                request.log.info(
+                    "removeUnusedLanguages - Completed successfully."
                 );
             },
             function(error) {
-                response.error("Error in removeUnusedLanguages: " + error);
-            }
-        );
-});
-
-// This job will remove any bookshelf records which currently do not have any books which use them.
-// The purpose is to keep BloomLibrary.org from displaying bookshelves with no books.
-// This is scheduled on Azure under bloom-library-maintenance.
-// You can also run it manually via REST:
-// curl -X POST -H "X-Parse-Application-Id: <insert app ID>" -H "X-Parse-Master-Key: <insert master key>" -d '{}' https://bloom-parse-server-develop.azurewebsites.net/parse/functions/removeUnusedBookshelves
-// (In theory, the -d '{}' shouldn't be needed because we are not passing any parameters, but it doesn't work without it.)
-Parse.Cloud.define("removeUnusedBookshelves", function(request, response) {
-    console.log("entering bloom-parse-server main.js removeUnusedBookshelves");
-
-    var allShelvesQuery = new Parse.Query("bookshelf");
-    allShelvesQuery.limit(1000000); // default is 100, supposedly. We want all of them.
-    allShelvesQuery
-        .find()
-        .then(function(shelves) {
-            var promise = Parse.Promise.as();
-            for (var i = 0; i < shelves.length; i++) {
-                // Use IIFE to pass the correct bookshelf down
-                (function() {
-                    var shelf = shelves[i];
-                    var bookQuery = new Parse.Query("books");
-                    bookQuery.equalTo("tags", "bookshelf:" + shelf.get("key"));
-                    promise = promise.then(function() {
-                        return bookQuery.count().then(function(count) {
-                            if (count === 0) {
-                                console.log(
-                                    "Deleting bookshelf " +
-                                        shelf.get("key") +
-                                        " because no books use it."
-                                );
-                                return shelf.destroy({
-                                    useMasterKey: true,
-                                    success: function() {
-                                        console.log("Deletion successful.");
-                                    },
-                                    error: function(error) {
-                                        console.log(
-                                            "Deletion failed: " + error
-                                        );
-                                    }
-                                });
-                            }
-                        });
-                    });
-                })();
-            }
-            return promise;
-        })
-        .then(
-            function() {
-                response.success(
-                    "removeUnusedBookshelves completed successfully."
-                );
-            },
-            function(error) {
-                response.error("Error in removeUnusedBookshelves: " + error);
+                request.log.error("removeUnusedLanguages - Terminated unsuccessfully with error: " + error);
             }
         );
 });
@@ -153,10 +93,9 @@ Parse.Cloud.define("removeUnusedBookshelves", function(request, response) {
 // A background job to populate usageCounts for languages and tags
 // This is scheduled on Azure under bloom-library-maintenance.
 // You can also run it manually via REST:
-// curl -X POST -H "X-Parse-Application-Id: <insert app ID>" -H "X-Parse-Master-Key: <insert Master key>" -d "{}" https://bloom-parse-server-develop.azurewebsites.net/parse/functions/populateCounts
-Parse.Cloud.define("populateCounts", function(request, response) {
-    console.log("entering bloom-parse-server main.js populateCounts");
-    request.log.info("Starting populateCounts.");
+// curl -X POST -H "X-Parse-Application-Id: <insert app ID>" -H "X-Parse-Master-Key: <insert Master key>" -d "{}" https://bloom-parse-server-develop.azurewebsites.net/parse/jobs/populateCounts
+Parse.Cloud.job("populateCounts", (request) => {
+    request.log.info("populateCounts - Starting.");
 
     var counters = { language: {}, tag: {} };
 
@@ -177,7 +116,7 @@ Parse.Cloud.define("populateCounts", function(request, response) {
             function incrementBookUsageCounts(books, index) {
                 //If we finished all the books, return resolved promise
                 if (index >= books.length) {
-                    request.log.info("Processed " + books.length + " books.");
+                    request.log.info("populateCounts - Processed " + books.length + " books.");
                     return Parse.Promise.as();
                 }
 
@@ -236,13 +175,12 @@ Parse.Cloud.define("populateCounts", function(request, response) {
                     newTag.set("name", tagName);
                     return newTag.save(null, { useMasterKey: true }).then(
                         function() {
-                            console.log("created tag " + tagName);
+                            request.log.info("populateCounts - Created tag " + tagName);
                             //Next tag
                             return incrementTagUsageCount(tags, index + 1);
                         },
                         function(error) {
-                            console.log("newTag.save failed: " + error);
-                            response.error("newTag.save failed: " + error);
+                            request.log.error(`populateCounts - Creation failed for new tag (${tagName}): ` + error);
                         }
                     );
                 }
@@ -257,7 +195,7 @@ Parse.Cloud.define("populateCounts", function(request, response) {
             function setLangUsageCount(data, index) {
                 //When done, return resolved promise
                 if (index >= data.length) {
-                    request.log.info(`Processed ${data.length} languages.`);
+                    request.log.info(`populateCounts - Processed ${data.length} languages.`);
                     return Parse.Promise.as();
                 }
 
@@ -270,12 +208,7 @@ Parse.Cloud.define("populateCounts", function(request, response) {
                         return setLangUsageCount(data, index + 1);
                     },
                     function(error) {
-                        console.log(
-                            `language ${languageId} save failed: ${error}`
-                        );
-                        response.error(
-                            `language ${languageId} save failed: ${error}`
-                        );
+                        request.log.error(`language ${languageId} save failed: ${error}`);
 
                         //Next language
                         return setLangUsageCount(data, index + 1);
@@ -296,7 +229,7 @@ Parse.Cloud.define("populateCounts", function(request, response) {
             function setTagUsageCount(data, index) {
                 //Return resolved promise when done
                 if (index >= data.length) {
-                    request.log.info(`Processed ${data.length} tags.`);
+                    request.log.info(`populateCounts - Processed ${data.length} tags.`);
                     return Parse.Promise.as();
                 }
 
@@ -311,8 +244,7 @@ Parse.Cloud.define("populateCounts", function(request, response) {
                             return setTagUsageCount(data, index + 1);
                         },
                         function(error) {
-                            console.log(`tag ${tagName} save failed: ${error}`);
-                            response.error(
+                            request.log.error(
                                 `tag ${tagName} save failed: ${error}`
                             );
 
@@ -328,10 +260,7 @@ Parse.Cloud.define("populateCounts", function(request, response) {
                             return setTagUsageCount(data, index + 1);
                         },
                         function(error) {
-                            console.log(
-                                `tag ${tagName} destroy failed: ${error}`
-                            );
-                            response.error(
+                            request.log.error(
                                 `tag ${tagName} destroy failed: ${error}`
                             );
 
@@ -353,11 +282,11 @@ Parse.Cloud.define("populateCounts", function(request, response) {
         })
         .then(
             function() {
-                response.success("Tag and Language usage counts updated!");
+                request.log.info("populateCounts - Completed successfully.");
             },
             function(error) {
-                response.error(
-                    "populateCounts terminated unsuccessfully with error: " +
+                request.log.error(
+                    "populateCounts - Terminated unsuccessfully with error: " +
                         error
                 );
             }
