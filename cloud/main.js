@@ -240,6 +240,40 @@ Parse.Cloud.beforeSave("books", function (request, response) {
         } else {
             book.set("harvestState", "Updated");
         }
+
+        // Prevent book uploads from overwriting certain fields changed by moderators
+        if (request.original) {
+            // These columns will not be overwritten unless the new book has truth-y values for them
+            // For scalar columns (these are more straightforward than array columns)
+            const scalarColumnsWithFallback = [ "summary", "librarianNote", "publisher", "originalPublisher"];
+            scalarColumnsWithFallback.forEach((columnName) => {
+                const newValue = book.get(columnName);
+                const originalValue = request.original.get(columnName);
+                if (!newValue && originalValue) {
+                    book.set(columnName, originalValue);
+                    console.log(`Changes to ${columnName} reverted`);
+                }
+            });
+
+            // These columns are array columns, for which we want to preserve all the pre-existing values
+            //
+            // tags - For now, we don't bother enforcing that the prefix part (before the colon) is unique (keep it simple for now).
+            //        If this is determined to be a requirement, then additional code needs to be added to handle that.
+            // bookshelves - We won't worry about the case where a moderator has deleted a bookshelf.
+            // languages - Actually, currently no examples where it's set right now, so...  I guess the behavior doesn't matter much yet
+            const arrayColumnsToUnion = [ "tags", "bookshelves" , "languages"];
+            arrayColumnsToUnion.forEach((columnName) => {
+                const originalArrayValue = request.original.get(columnName);
+                if (originalArrayValue && originalArrayValue.length >= 1) {
+                    book.addAllUnique(columnName, originalArrayValue);
+                    console.log(`Adding pre-emptively ${columnName}'s original values`);
+                }
+            });
+
+            // Features is able to be changed by moderators, but it's also computed by BloomDesktop. Even if it's empty, keep the BloomDesktop value.
+            // My sense is that the auto-computed value is generally more likely to be correct than the value from the DB.
+            // The user might've removed all the pages with that feature.
+        }
     }
 
     // Bloom 3.6 and earlier set the authors field, but apparently, because it
