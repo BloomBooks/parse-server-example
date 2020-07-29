@@ -245,7 +245,12 @@ Parse.Cloud.beforeSave("books", function (request, response) {
         if (request.original) {
             // These columns will not be overwritten unless the new book has truth-y values for them
             // For scalar columns (these are more straightforward than array columns)
-            const scalarColumnsWithFallback = [ "summary", "librarianNote", "publisher", "originalPublisher"];
+            const scalarColumnsWithFallback = [
+                "summary",
+                "librarianNote",
+                "publisher",
+                "originalPublisher",
+            ];
             scalarColumnsWithFallback.forEach((columnName) => {
                 const newValue = book.get(columnName);
                 const originalValue = request.original.get(columnName);
@@ -259,7 +264,7 @@ Parse.Cloud.beforeSave("books", function (request, response) {
             // tags - For now, we don't bother enforcing that the prefix part (before the colon) is unique (keep it simple for now).
             //        If this is determined to be a requirement, then additional code needs to be added to handle that.
             // bookshelves - We won't worry about the case where a moderator has deleted a bookshelf.
-            const arrayColumnsToUnion = [ "tags", "bookshelves"];
+            const arrayColumnsToUnion = ["tags", "bookshelves"];
             arrayColumnsToUnion.forEach((columnName) => {
                 const originalArrayValue = request.original.get(columnName);
                 if (originalArrayValue && originalArrayValue.length >= 1) {
@@ -680,6 +685,9 @@ Parse.Cloud.define("setupTables", function (request, response) {
                 // probably related to each other. This allows us to link, for example, books that are translations
                 // of each other.  (https://www.nuget.org/packages/Shipwreck.Phash/ is used to calculate the phash.)
                 { name: "phashOfFirstContentImage", type: "String" },
+                // This is the name of the branding project assigned to the book. "Default" means that
+                // there isn't any specific branding project assigned to the book.
+                { name: "brandingProjectName", type: "String" },
                 // Fields required by Harvester
                 { name: "harvestState", type: "String" },
                 { name: "harvesterId", type: "String" },
