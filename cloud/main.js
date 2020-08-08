@@ -4,7 +4,7 @@ require("./emails.js"); // allows email-specific could functions to be defined
 // This function will call save on every book. This is useful for
 // applying the functionality in beforeSaveBook to every book,
 // particularly updating the tags and search fields.
-Parse.Cloud.job("saveAllBooks", function (request, res) {
+Parse.Cloud.define("saveAllBooks", function (request, res) {
     request.log.info("saveAllBooks - Starting.");
     // Query for all books
     var query = new Parse.Query("books");
@@ -339,6 +339,14 @@ Parse.Cloud.beforeSave("books", function (request, response) {
     }
     request.object.set("tags", tagsOutput);
     request.object.set("search", search);
+
+    // Transfer bookLineage, which is a comma-separated string, into an array for better querying
+    const bookLineage = book.get("bookLineage");
+    let bookLineageArray = undefined;
+    if (bookLineage) {
+        bookLineageArray = bookLineage.split(",");
+    }
+    request.object.set("bookLineageArray", bookLineageArray);
 
     var creator = request.user;
 
@@ -688,6 +696,10 @@ Parse.Cloud.define("setupTables", function (request, response) {
                 // This is the name of the branding project assigned to the book. "Default" means that
                 // there isn't any specific branding project assigned to the book.
                 { name: "brandingProjectName", type: "String" },
+                // BloomDesktop creates bookLineage as a comma-separated string.
+                // But we need it to be an array for more complex querying.
+                // So beforeSave on books converts it to an array in this field.
+                { name: "bookLineageArray", type: "Array" },
                 // Fields required by Harvester
                 { name: "harvestState", type: "String" },
                 { name: "harvesterId", type: "String" },
