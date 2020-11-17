@@ -404,6 +404,35 @@ Parse.Cloud.afterSave("books", function (request) {
     //         });
     //     });
 
+    // Now that we have saved the book, see if there are any new tags we need to create in the tag table.
+    var Tag = Parse.Object.extend("tag");
+    book.get("tags").forEach(function (name) {
+        var query = new Parse.Query(Tag);
+        query.equalTo("name", name);
+        query.count({
+            success: function (count) {
+                if (count == 0) {
+                    // We have a tag on this book which doesn't exist in the tag table. Create it.
+                    var tag = new Tag();
+                    tag.set("name", name);
+                    tag.save(null, { useMasterKey: true }).then(
+                        function () {
+                            // Success. Nothing else to do.
+                        },
+                        function (error) {
+                            console.log("tag.save failed: " + error);
+                            request.log.error("tag.save failed: " + error);
+                        }
+                    );
+                }
+            },
+            error: function (error) {
+                console.log("unable to get tags: " + error);
+                request.log.error("unable to get tags: " + error);
+            },
+        });
+    });
+
     try {
         //send email if this didn't exist before
         // this seemed to work locally, but not on the azure production server,
