@@ -137,42 +137,25 @@ Parse.Cloud.job("populateCounts", (request, res) => {
             });
         })
         // Now update the language table records with the correct usage count
-        .then(function () {
-            function setLangUsageCount(data, index) {
-                //When done, return resolved promise
-                if (index >= data.length) {
-                    request.log.info(
-                        `populateCounts - Processed ${data.length} languages.`
-                    );
-                    return Parse.Promise.as();
-                }
-
-                var language = data[index];
-                var languageId = language.id;
-                language.set("usageCount", langCounts[languageId] || 0);
-                return language.save(null, { useMasterKey: true }).then(
-                    function () {
-                        //Next language
-                        return setLangUsageCount(data, index + 1);
-                    },
-                    function (error) {
-                        request.log.error(
-                            `language ${languageId} save failed: ${error}`
-                        );
-
-                        //Next language
-                        return setLangUsageCount(data, index + 1);
-                    }
-                );
-            }
-
+        .then(() => {
             var langQuery = new Parse.Query("language");
             langQuery.limit(1000000); // Default is 100. We want all of them.
 
-            //Cycle through languages, assigning usage counts
-            return langQuery.find().then((results) => {
-                //Start recursion
-                return setLangUsageCount(results, 0);
+            return langQuery.find().then((languagesToUpdate) => {
+                languagesToUpdate.forEach((language) => {
+                    language.set("usageCount", langCounts[language.id] || 0);
+                });
+
+                return Parse.Object.saveAll(languagesToUpdate, {
+                    useMasterKey: true,
+                    success: (successfulUpdates) => {
+                        request.log.info(
+                            `populateCounts - Processed ${successfulUpdates.length} languages.`
+                        );
+                        return Parse.Promise.as();
+                    },
+                    // Let any errors bubble up.
+                });
             });
         })
         .then(
