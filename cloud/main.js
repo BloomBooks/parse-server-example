@@ -36,83 +36,18 @@ Parse.Cloud.define("saveAllBooks", function (request, res) {
         );
 });
 
-// This job will remove any language records which currently do not have any books which use them.
-// The purpose is to keep BloomLibrary.org from displaying languages with no books.
-// This is scheduled on Azure under bloom-library-maintenance.
-// You can also run it manually via REST:
-// curl -X POST -H "X-Parse-Application-Id: <insert app ID>" -H "X-Parse-Master-Key: <insert master key>" -d '{}' https://bloom-parse-server-develop.azurewebsites.net/parse/jobs/removeUnusedLanguages
-// (In theory, the -d '{}' shouldn't be needed because we are not passing any parameters, but it doesn't work without it.)
-Parse.Cloud.job("removeUnusedLanguages", function (request, res) {
-    request.log.info("removeUnusedLanguages - Starting.");
-
-    var allLangQuery = new Parse.Query("language");
-    allLangQuery.limit(1000000); // default is 100, supposedly. We want all of them.
-    allLangQuery
-        .find()
-        .then(function (languages) {
-            var promise = Parse.Promise.as();
-            for (var i = 0; i < languages.length; i++) {
-                // Use IIFE to pass the correct language down
-                (function () {
-                    var lang = languages[i];
-                    var bookQuery = new Parse.Query("books");
-                    bookQuery.equalTo("langPointers", lang);
-                    promise = promise.then(function () {
-                        return bookQuery.count().then(function (count) {
-                            if (count === 0) {
-                                request.log.info(
-                                    "removeUnusedLanguages - Deleting language " +
-                                        lang.get("name") +
-                                        " because no books use it."
-                                );
-                                return lang.destroy({
-                                    useMasterKey: true,
-                                    success: function () {
-                                        request.log.info(
-                                            "removeUnusedLanguages - Deletion successful."
-                                        );
-                                    },
-                                    error: function (error) {
-                                        request.log.error(
-                                            "removeUnusedLanguages - Deletion failed: " +
-                                                error
-                                        );
-                                    },
-                                });
-                            }
-                        });
-                    });
-                })();
-            }
-            return promise;
-        })
-        .then(
-            function () {
-                request.log.info(
-                    "removeUnusedLanguages - Completed successfully."
-                );
-                res.success();
-            },
-            function (error) {
-                request.log.error(
-                    "removeUnusedLanguages - Terminated unsuccessfully with error: " +
-                        error
-                );
-                res.error(error);
-            }
-        );
-});
-
-// A background job to populate usageCounts for languages
+// A background job to populate usageCounts for languages.
+// Also delete any unused language records (previously a separate job: removeUnusedLanguages).
 // (tags processing was removed 4/2020 because we don't use the info)
 //
-// This is scheduled on Azure under bloom-library-maintenance.
+// This is scheduled on Azure under bloom-library-maintenance-{prod|dev}-daily.
 // You can also run it manually via REST:
-// curl -X POST -H "X-Parse-Application-Id: <insert app ID>" -H "X-Parse-Master-Key: <insert Master key>" -d "{}" https://bloom-parse-server-develop.azurewebsites.net/parse/jobs/populateCounts
+// curl -X POST -H "X-Parse-Application-Id: <app ID>" -H "X-Parse-Master-Key: <master key>" -d "{}" https://bloom-parse-server-develop.azurewebsites.net/parse/jobs/populateCounts
 Parse.Cloud.job("populateCounts", (request, res) => {
     request.log.info("populateCounts - Starting.");
 
     var langCounts = {};
+    var languagesToDelete = new Array();
 
     //Make and execute book query
     var bookQuery = new Parse.Query("books");
@@ -135,39 +70,71 @@ Parse.Cloud.job("populateCounts", (request, res) => {
                     });
                 }
             });
-        })
-        // Now update the language table records with the correct usage count
-        .then(() => {
+
             var langQuery = new Parse.Query("language");
             langQuery.limit(1000000); // Default is 100. We want all of them.
+            return langQuery.find();
+        })
+        .then((languagesToUpdate) => {
+            languagesToUpdate.forEach((language) => {
+                var newUsageCount = langCounts[language.id] || 0;
+                language.set("usageCount", newUsageCount);
+                if (newUsageCount === 0) {
+                    languagesToDelete.push(language);
+                }
+            });
 
-            return langQuery.find().then((languagesToUpdate) => {
-                languagesToUpdate.forEach((language) => {
-                    language.set("usageCount", langCounts[language.id] || 0);
-                });
+            // In theory, we could remove items in languagesToDelete from languagesToUpdate.
+            // But there will be so few of them, it doesn't seem worth it.
 
-                return Parse.Object.saveAll(languagesToUpdate, {
-                    useMasterKey: true,
-                    success: (successfulUpdates) => {
-                        request.log.info(
-                            `populateCounts - Processed ${successfulUpdates.length} languages.`
-                        );
-                        return Parse.Promise.as();
-                    },
-                    // Let any errors bubble up.
-                });
+            return Parse.Object.saveAll(languagesToUpdate, {
+                useMasterKey: true,
+                success: (successfulUpdates) => {
+                    request.log.info(
+                        `populateCounts - Updated usageCount for ${successfulUpdates.length} languages.`
+                    );
+                },
+                // Let any errors bubble up.
+            });
+        })
+        .then(() => {
+            if (languagesToDelete.length === 0) return Parse.Promise.as();
+
+            return Parse.Object.destroyAll(languagesToDelete, {
+                useMasterKey: true,
+                success: (successfulDeletes) => {
+                    request.log.info(
+                        `populateCounts - Deleted ${
+                            successfulDeletes.length
+                        } languages which had no books: ${successfulDeletes.map(
+                            (l) => l.get("isoCode")
+                        )}`
+                    );
+                },
+                // Let any errors bubble up.
             });
         })
         .then(
-            function () {
+            () => {
                 request.log.info("populateCounts - Completed successfully.");
                 res.success();
             },
-            function (error) {
-                request.log.error(
-                    "populateCounts - Terminated unsuccessfully with error: " +
-                        error
-                );
+            (error) => {
+                if (error.code === Parse.Error.AGGREGATE_ERROR) {
+                    error.errors.forEach((iError) => {
+                        request.log.error(
+                            `Couldn't process ${iError.object.id} due to ${iError.message}`
+                        );
+                    });
+                    request.log.error(
+                        "populateCounts - Terminated unsuccessfully."
+                    );
+                } else {
+                    request.log.error(
+                        "populateCounts - Terminated unsuccessfully with error: " +
+                            error
+                    );
+                }
                 res.error(error);
             }
         );
