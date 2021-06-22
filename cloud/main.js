@@ -215,8 +215,7 @@ Parse.Cloud.beforeSave("books", function (request, response) {
             //
             // tags - For now, we don't bother enforcing that the prefix part (before the colon) is unique (keep it simple for now).
             //        If this is determined to be a requirement, then additional code needs to be added to handle that.
-            // bookshelves - We won't worry about the case where a moderator has deleted a bookshelf.
-            const arrayColumnsToUnion = ["tags", "bookshelves"];
+            const arrayColumnsToUnion = ["tags"];
             arrayColumnsToUnion.forEach((columnName) => {
                 const originalArrayValue = request.original.get(columnName);
                 if (originalArrayValue && originalArrayValue.length >= 1) {
@@ -260,22 +259,26 @@ Parse.Cloud.beforeSave("books", function (request, response) {
             // In Mar 2020 we moved bookshelf tags to their own column so that we could do
             // regex on them without limiting what we could do with other tags
             if (tagName.indexOf("bookshelf") === 0) {
-                // Note, we don't want to lose any bookshelves that we may have added by hand
-                // using the web ui. But means that if you hand-edit the meta.json to have one
-                // bookshelf, uploaded, realized a mistake, changed it and re-uploaded, well
-                // now you would have both bookshelves.
-                request.object.addUnique(
-                    "bookshelves",
-                    tagName.replace("bookshelf:", "")
-                );
+                // Users uploading a book may make a mistake and want to replace the bookshelf.
+                // Bloom allows only one bookshelf tag at the moment.
+                // Librarians can add more bookshelves, and will have to repeat that operation if a
+                // book is uploaded.
+                // See https://issues.bloomlibrary.org/youtrack/issue/BL-10031.
+                const newshelf = tagName.replace("bookshelf:", "");
+                if (newUpdateSource.startsWith("BloomDesktop")) {
+                    request.object.set("bookshelves", [newshelf]);
+                } else {
+                    request.object.addUnique("bookshelves", newshelf);
+                }
             }
             /* TODO: Mar 2020: we are leaving bookshelf:foobar tags in for now so that we don't have to go into
             the legacy angular code and adjust it to this new system. But once we retire that, we
             should uncomment this else block so that the bookshelf tag is stripped, then run SaveAllBooks()
-            to remove it from all the records.
-             else {*/
-            tagsOutput.push(tagName);
-            /* } */
+            to remove it from all the records.*/
+            /* TODONE: June 2021: the legacy angular code has been retired. */
+            else {
+                tagsOutput.push(tagName);
+            }
 
             // We only want to put the relevant information from the tag into the search string.
             // i.e. for region:Asia, we only want Asia. We also exclude system tags.
